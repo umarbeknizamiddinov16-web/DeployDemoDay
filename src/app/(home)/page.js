@@ -196,7 +196,7 @@ export default function Home() {
               <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-200 sm:text-base">{getText(language, "home", "description")}</p>
             </div>
 
-            <div className="rounded-[24px] border border-white/10 bg-slate-950/70 px-5 py-4 backdrop-blur">
+            <div className="rounded-3xl border border-white/10 bg-slate-950/70 px-5 py-4 backdrop-blur">
               <p className="text-[11px] uppercase tracking-[0.35em] text-slate-300">{getText(language, "home", "accessGateTitle")}</p>
               <p className="mt-2 text-sm leading-7 text-slate-100">{getText(language, "home", "accessGateText")}</p>
             </div>
@@ -207,7 +207,7 @@ export default function Home() {
               <Link
                 key={card.title}
                 href={card.href}
-                className={`rounded-[24px] border px-4 py-4 transition hover:-translate-y-0.5 hover:border-cyan-200 ${card.tone}`}
+                className={`rounded-3xl border px-4 py-4 transition hover:-translate-y-0.5 hover:border-cyan-200 ${card.tone}`}
               >
                 <p className="text-xs uppercase tracking-[0.25em] text-cyan-100">{getText(language, "home", "start")}</p>
                 <p className="mt-3 text-lg font-bold text-white">{card.title}</p>
@@ -229,7 +229,7 @@ export default function Home() {
                 <Link
                   key={card.title}
                   href={card.href}
-                  className="rounded-[24px] border border-white/10 bg-white/5 p-4 transition hover:border-cyan-200"
+                  className="rounded-3xl border border-white/10 bg-white/5 p-4 transition hover:border-cyan-200"
                 >
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-lg font-bold text-white">{card.title}</p>

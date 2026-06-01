@@ -82,7 +82,7 @@ export default function ProfilePage() {
   return (
     <UniverseShell>
       <div className="space-y-6">
-        <div className="rounded-[24px] border border-cyan-400/20 bg-gradient-to-br from-cyan-500/10 to-fuchsia-500/5 p-6">
+        <div className="rounded-3xl border border-cyan-400/20 bg-linear-to-br from-cyan-500/10 to-fuchsia-500/5 p-6">
           <p className="text-sm uppercase tracking-[0.3em] text-cyan-200">{t.badge}</p>
           <h2 className="mt-4 text-3xl font-black text-white">{t.title}</h2>
           <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-200">{t.description}</p>

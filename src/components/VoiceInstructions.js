@@ -172,7 +172,7 @@ export default function VoiceInstructions({ language: languageProp, onRegister, 
       return;
     }
 
-    const { voiceName, volume, pitch } = getSpeechOptions();
+    const { voiceName, volume, pitch, rate } = getSpeechOptions();
     const text = normalizeSpeechText([instructions.intro, instructions.summary, instructions.aiText, instructions.bullets.join(" ")].join(" "));
 
     const utterance = new SpeechSynthesisUtterance(text);
@@ -299,7 +299,7 @@ export default function VoiceInstructions({ language: languageProp, onRegister, 
         resolve();
         return;
       }
-      const { voiceName, volume, pitch } = getSpeechOptions();
+      const { voiceName, volume, pitch, rate } = getSpeechOptions();
       const utterance = new SpeechSynthesisUtterance(normalizeSpeechText(text));
       utterance.lang = instructions.lang || "en-US";
       utterance.voice = getBestVoice(instructions.lang || "en", voiceName);

@@ -202,13 +202,13 @@ export default function SettingsPage() {
   return (
     <UniverseShell>
       <div className="space-y-6">
-        <div className="rounded-[24px] border border-cyan-400/20 bg-gradient-to-br from-cyan-500/10 to-fuchsia-500/5 p-6">
+        <div className="rounded-3xl border border-cyan-400/20 bg-linear-to-br from-cyan-500/10 to-fuchsia-500/5 p-6">
           <p className="text-sm uppercase tracking-[0.3em] text-cyan-200">{t.badge}</p>
           <h2 className="mt-4 text-3xl font-black text-white">{t.title}</h2>
           <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-200">{t.description}</p>
         </div>
 
-        <div className="rounded-[24px] border border-emerald-400/20 bg-emerald-500/5 p-6">
+        <div className="rounded-3xl border border-emerald-400/20 bg-emerald-500/5 p-6">
           <p className="text-sm uppercase tracking-[0.3em] text-emerald-200">{t.profileTitle}</p>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <label className="block text-sm text-slate-100">
@@ -306,7 +306,7 @@ export default function SettingsPage() {
           </label>
         </div>
 
-        <div className="rounded-[24px] border border-cyan-400/20 bg-white/5 p-6">
+        <div className="rounded-3xl border border-cyan-400/20 bg-white/5 p-6">
           <p className="text-sm uppercase tracking-[0.3em] text-cyan-200">{t.settingsTitle}</p>
           <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {t.toggles.map((toggle, idx) => {
