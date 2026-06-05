@@ -1,4 +1,10 @@
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "AIzaSyDgZrK45u-ueZMldcSzldDdQLI099YxRV0";
+﻿const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4.5-mini";
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
+
+const hasGeminiKey = typeof GEMINI_API_KEY === "string" && GEMINI_API_KEY.length > 0;
+const hasOpenAIKey = typeof OPENAI_API_KEY === "string" && OPENAI_API_KEY.length > 0;
 
 const siteKnowledge = `
 Digital Universe is a modular futuristic web interface.
@@ -30,71 +36,180 @@ Implemented features:
 The project is a Next.js application built with React and custom UI.
 `;
 
+const normalizeQuestion = (question) => {
+  if (!question) return "";
+  return question
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/([.,!?])(?=[^\s])/g, "$1 ")
+    .replace(/\s+([.,!?])/g, "$1")
+    .replace(/\s+$/g, "");
+};
+
+const detectResponseLanguage = (question) => {
+  if (/[а-яА-ЯёЁ]/.test(question)) return "Russian";
+  if (/[a-zA-Z]/.test(question)) return "English";
+  return "Russian";
+};
+
+const callGoogleGemini = async (prompt) => {
+  if (!hasGeminiKey) {
+    return { answer: null, error: `Ключ GEMINI_API_KEY отсутствует в файле .env` };
+  }
+
+  try {
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+    const requestBody = {
+      contents: [{ role: "user", parts: [{ text: prompt }] }]
+    };
+
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody),
+    });
+
+    const payload = await response.json();
+
+    if (!response.ok) {
+      const errorText = payload?.error?.message || `HTTP ${response.status}`;
+      return { answer: null, error: `Google API Error: ${errorText}` };
+    }
+
+    const candidateContent = payload?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!candidateContent) {
+      return { answer: null, error: `Google вернул пустую структуру ответов.` };
+    }
+
+    return { answer: candidateContent, error: null };
+  } catch (err) {
+    return { answer: null, error: `Сбой сети при запросе к Google: ${err.message}` };
+  }
+};
+
+const callOpenAI = async (prompt) => {
+  if (!hasOpenAIKey) {
+    return { answer: null, error: `Ключ OPENAI_API_KEY отсутствует в файле .env` };
+  }
+
+  try {
+    const response = await fetch(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: OPENAI_MODEL,
+          messages: [{ role: "user", content: prompt }],
+        }),
+      }
+    );
+
+    const text = await response.text();
+    let payload;
+
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      return { answer: null, error: `OpenAI вернул не JSON: ${text.slice(0, 150)}` };
+    }
+
+    if (!response.ok) {
+      return { answer: null, error: `OpenAI API Error: ${payload?.error?.message || 'Unknown'}` };
+    }
+
+    const answer = payload?.choices?.[0]?.message?.content;
+    return { answer, error: answer ? null : "OpenAI вернул пустой текст ответа." };
+  } catch (err) {
+    return { answer: null, error: `Сбой сети при запросе к OpenAI: ${err.message}` };
+  }
+};
+
 export async function POST(request) {
   try {
-    const { question } = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch (e) {
+      return new Response(JSON.stringify({ error: "Invalid request JSON body" }), { status: 400 });
+    }
+
+    const { question } = body;
 
     if (!question || typeof question !== "string") {
-      return Response.json(
-        { error: "Question is required." },
-        { status: 400 }
-      );
+      return new Response(JSON.stringify({ error: "Question is required and must be a string." }), { status: 400 });
     }
 
-    const prompt = `
-You are Gemini. Answer in Russian.
-Use the site knowledge below when the user asks about this site or its modules.
-Use general knowledge about space and astronomy when the user asks about cosmic topics.
-Do not invent site content that is not listed in the site knowledge.
+    const normalizedQuestion = normalizeQuestion(question);
+    const responseLanguage = detectResponseLanguage(question);
 
-SITE KNOWLEDGE:
-${siteKnowledge}
+    const prompt = `You are Gemini, a helpful AI assistant that answers ALL questions. If the user's text contains typos, spelling mistakes, or small grammar errors, correct them silently and answer the intended meaning. Respond in ${responseLanguage}.
+  
+Site context: ${siteKnowledge}
 
-USER QUESTION:
-${question}
-`;
+User question: ${normalizedQuestion}`;
 
-    // Try Gemini API first
-    try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            contents: [
-              {
-                role: "user",
-                parts: [{ text: prompt }],
-              },
-            ],
-          }),
-        }
-      );
-      const payload = await response.json();
-      if (response.ok && payload?.candidates?.[0]?.content?.parts?.[0]?.text) {
-        return Response.json({ answer: payload.candidates[0].content.parts[0].text });
+    let finalAnswer = null;
+    let errorsLog = [];
+
+    // 1. Сначала пробуем Gemini, если есть ключ
+    if (hasGeminiKey) {
+      const geminiResult = await callGoogleGemini(prompt);
+      if (geminiResult.answer) {
+        finalAnswer = geminiResult.answer;
+      } else {
+        errorsLog.push(`[Gemini Error]: ${geminiResult.error}`);
       }
-    } catch (e) {
-      // ignore, fallback below
+    } else {
+      errorsLog.push("[Gemini Skip]: Ключ Gemini не задан.");
     }
 
-    // Fallback: answer anything using local logic
-    let fallback = "\u0418\u0437\u0432\u0438\u043d\u0438\u0442\u0435, \u0432\u0440\u0435\u043c\u0435\u043d\u043d\u043e \u043d\u0435\u0442 \u0434\u043e\u0441\u0442\u0443\u043f\u0430 \u043a Gemini. ";
-    if (/космос|space|вселенн|планет|звезд|астро|галактик|солнечн|орбит|чёрн(ая|ые|ую|ым|ом|ого) дыра|big bang|большой взрыв|экзопланет|телескоп|астронавт|луна|земля|марс|юпитер|сатурн|венера|нептун|уран|меркурий|плутон|комет|метеор|астероид|солнц|звезда|созвезд|спутник|космонавт|исследован|галактик|квазар|пульсар|сверхнов|космическ|вакуум|материя|антивещество|тёмная материя|dark matter|dark energy|dark energy|экзосфера|экзосистема|экзожизнь|экзобиология|экзокосмос/i.test(question)) {
-      fallback += "\u041a\u043e\u0441\u043c\u043e\u0441 \u2014 \u044d\u0442\u043e \u0432\u0441\u0435\u043b\u0435\u043d\u043d\u0430\u044f, \u0432 \u043a\u043e\u0442\u043e\u0440\u043e\u0439 \u043d\u0430\u0445\u043e\u0434\u044f\u0442\u0441\u044f \u043f\u043b\u0430\u043d\u0435\u0442\u044b, \u0437\u0432\u0451\u0437\u0434\u044b, \u0433\u0430\u043b\u0430\u043a\u0442\u0438\u043a\u0438 \u0438 \u043c\u043d\u043e\u0433\u043e\u0435 \u0434\u0440\u0443\u0433\u043e\u0435. \u0415\u0451 \u0438\u0437\u0443\u0447\u0430\u044e\u0442 \u0430\u0441\u0442\u0440\u043e\u043d\u043e\u043c\u044b \u0438 \u043a\u043e\u0441\u043c\u043e\u043d\u0430\u0432\u0442\u044b. \u0415\u0441\u043b\u0438 \u043d\u0443\u0436\u043d\u043e \u043a\u043e\u043d\u043a\u0440\u0435\u0442\u043d\u043e\u0435 \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u0435 \u043a\u043e\u0441\u043c\u043e\u0441\u0430 \u0438\u043b\u0438 \u043a\u043e\u0441\u043c\u0438\u0447\u0435\u0441\u043a\u0438\u0445 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 \u2014 \u0441\u043f\u0440\u043e\u0441\u0438 \u043a\u043e\u043d\u043a\u0440\u0435\u0442\u043d\u043e!";
-    } else if (/site|сайт|digital universe|модул|страниц|feature|функци|ai|терминал|профиль|настройк|карта|обзор|about|dashboard|login|register|system|universe|tasks|notes|stats|settings|api|gemini|react|next|js|javascript|frontend|backend|node|сервер|клиент|ui|ux|дизайн|архитектур|структур|проект|разработк|код|файл|папк|компонент|layout|shell|header|footer|link|route|api|endpoint|feature|фича|фичи|фич|описан|описание|readme|package|json|config|tailwind|postcss|globals|css|public|favicon|ico|readme|md/i.test(question)) {
-      fallback += "Этот сайт — Digital Universe, модульная цифровая вселенная на Next.js. Здесь есть модули: AI, терминал, профиль, настройки, карта, дашборд и другие. Каждый модуль — отдельная страница. Если хочешь узнать про конкретный модуль, задай вопрос!";
-    } else {
-      fallback += "Я могу отвечать на любые вопросы! Задай что угодно про космос, науку, технологии, программирование, искусственный интеллект, историю, культуру и многое другое.";
+    // 2. Если Gemini не ответил, но есть ключ OpenAI — пробуем подстраховаться через OpenAI
+    if (!finalAnswer && hasOpenAIKey) {
+      const openaiResult = await callOpenAI(prompt);
+      if (openaiResult.answer) {
+        finalAnswer = openaiResult.answer;
+      } else {
+        errorsLog.push(`[OpenAI Error]: ${openaiResult.error}`);
+      }
+    } else if (!finalAnswer) {
+      errorsLog.push("[OpenAI Skip]: Ключ OpenAI не задан.");
     }
-    return Response.json({ answer: fallback });
+
+    // Если хоть один ИИ ответил — отдаем успешный результат
+    if (finalAnswer) {
+      return new Response(JSON.stringify({ answer: finalAnswer }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    // Если всё сломалось — выводим ПОДРОБНЫЙ лог ошибок прямо на экран
+    const combinedErrors = errorsLog.join("\n");
+    const debugMessage = `⚠️ ОШИБКА КЛЮЧЕЙ ИЛИ СЕТИ!\n Ни один ИИ не смог ответить.\n\nЛог инспектора:\n${combinedErrors}\n\n👉 Что делать?\n1. Проверьте правильность имен переменных в .env\n2. Перезапустите сервер (npm run dev) в терминале\n3. Если вы в РФ/РБ, включите VPN на ПК (Google блокирует запросы по IP).`;
+
+    return new Response(JSON.stringify({ answer: debugMessage }), {
+      status: 200, 
+      headers: { "Content-Type": "application/json" }
+    });
+
   } catch (error) {
-    return Response.json(
-      { error: error instanceof Error ? error.message : "Unknown server error" },
-      { status: 500 }
+    console.error("--- КРИТИЧЕСКАЯ ОШИБКА НА СЕРВЕРЕ ---");
+    console.error(error);
+    
+    return new Response(
+      JSON.stringify({ 
+        answer: `Системный сбой: ${error.message}`, 
+        error: error.message,
+        stack: error.stack 
+      }), 
+      { 
+        status: 500, 
+        headers: { "Content-Type": "application/json" } 
+      }
     );
   }
 }

@@ -9,7 +9,7 @@ const translations = {
     badge: "AI Module",
     title: "Gemini-powered intelligence",
     description:
-      "Здесь AI может отвечать про космос и про содержимое Digital Universe, используя Gemini и встроенный контекст сайта.",
+      "Здесь AI может отвечать про космос и про содержимое Digital Universe, понимает опечатки и ошибки в тексте, используя Gemini и встроенный контекст сайта.",
     askGemini: "Ask Gemini",
     placeholder: "Например: что находится на этом сайте?",
     send: "Отправить запрос",
@@ -39,7 +39,7 @@ const translations = {
     badge: "AI moduli",
     title: "Gemini bilan quvvatlangan intellekt",
     description:
-      "Bu yerda AI kosmos va Digital Universe mazmuni haqida Gemini va saytdagi ichki kontekst orqali javob bera oladi.",
+      "Bu yerda AI kosmos va Digital Universe mazmuni haqida Gemini va saytdagi ichki kontekst orqali javob bera oladi, shuningdek matndagi xatolarni tushunishi mumkin.",
     askGemini: "Gemini so‘raydi",
     placeholder: "Masalan: ushbu saytda nima bor?",
     send: "So‘rovni yuborish",
@@ -69,7 +69,7 @@ const translations = {
     badge: "AI Module",
     title: "Gemini-powered intelligence",
     description:
-      "This AI can answer about space and the contents of Digital Universe using Gemini and the site’s built-in context.",
+      "This AI can answer about space and the contents of Digital Universe using Gemini and the site’s built-in context, and it can understand typos and small input errors.",
     askGemini: "Ask Gemini",
     placeholder: "For example: what is on this website?",
     send: "Send request",

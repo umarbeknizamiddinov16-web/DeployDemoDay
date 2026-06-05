@@ -82,14 +82,10 @@ export default function SplashLogo() {
                 style={{
                   position: "absolute",
                   left: 0,
-                  top: "-4.2rem",
+                  top: "-4.5rem",
                   width: "100%",
                   minWidth: "20rem",
-                  height: "0.7rem",
-                  background: "linear-gradient(90deg, rgba(0, 255, 255, 1), rgba(255, 255, 255, 1))",
-                  boxShadow: "0 0 48px rgba(0, 255, 255, 0.95), 0 0 180px rgba(255, 255, 255, 0.95)",
-                  border: "2px solid rgba(255, 255, 255, 1)",
-                  borderRadius: "999px",
+                  height: "1.2rem",
                   transformOrigin: "left center",
                   overflow: "visible",
                   zIndex: 9999,
@@ -98,21 +94,66 @@ export default function SplashLogo() {
                 animate={{ opacity: 1, scaleX: 1 }}
                 transition={{ duration: 0.5, ease: "easeOut" }}
               >
+                {/* blurred glow that grows as a trail behind the dot */}
+                <motion.span
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    width: "0%",
+                    height: "0.9rem",
+                    background: "linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(0,255,255,0.25) 35%, rgba(255,255,255,0.95) 100%)",
+                    filter: "blur(6px)",
+                    borderRadius: "999px",
+                    zIndex: 9996,
+                    pointerEvents: "none",
+                  }}
+                  initial={{ width: "0%", opacity: 0.9 }}
+                  animate={{ width: ["0%", "100%"], opacity: [0.9, 1] }}
+                  transition={{ delay: 2.2, duration: 3.5, ease: "easeInOut", times: [0, 1] }}
+                />
+
+                {/* solid core highlight grows as a solid trail right behind the dot */}
+                <motion.span
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    width: "0%",
+                    height: "0.42rem",
+                    background: "linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(0,255,255,0.45) 40%, rgba(255,255,255,1) 100%)",
+                    borderRadius: "999px",
+                    zIndex: 9998,
+                    pointerEvents: "none",
+                  }}
+                  initial={{ width: "0%", opacity: 1 }}
+                  animate={{ width: ["0%", "100%"] }}
+                  transition={{ delay: 2.2, duration: 3.5, ease: "easeInOut", times: [0, 1] }}
+                />
+
+                {/* ИСПРАВЛЕННАЯ ТОЧКА */}
                 <motion.span
                   className="splash-dot"
                   style={{
                     position: "absolute",
-                    top: "50%",
+                    top: "50%", // Изменено с calc(50% - 2px) на ровные 50%
                     width: "2.6rem",
                     height: "2.6rem",
                     borderRadius: "999px",
                     background: "radial-gradient(circle at center, #ffffff 35%, #ffffff 100%)",
                     border: "2px solid rgba(255, 255, 255, 1)",
-                    boxShadow: "0 0 50px rgba(255, 255, 255, 1), 0 0 240px rgba(255, 255, 255, 1), 0 0 90px rgba(255, 255, 255, 0.9)",
-                    transform: "translate(-50%, -50%)",
+                    // transform: "translate(-50%, -50%)" был удален отсюда, чтобы не ломать анимацию
                     zIndex: 10000,
                   }}
-                  initial={{ left: "0%", opacity: 0, scale: 0.8 }}
+                  initial={{ 
+                    left: "0%", 
+                    opacity: 0, 
+                    scale: 0.8,
+                    x: "-50%", // Добавлено центрирование по X средствами Framer Motion
+                    y: "-50%"  // Добавлено центрирование по Y средствами Framer Motion
+                  }}
                   animate={{
                     left: ["0%", "100%"],
                     opacity: [0, 1, 1],

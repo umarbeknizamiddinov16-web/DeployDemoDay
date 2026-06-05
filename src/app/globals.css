@@ -111,22 +111,6 @@ html {
   background: none;
 }
 
-.splash-line {
-  position: absolute;
-  left: 0;
-  top: -1.8rem;
-  width: 100%;
-  min-width: 20rem;
-  height: 0.55rem;
-  background: linear-gradient(90deg, rgba(255, 0, 255, 1), rgba(255, 255, 255, 1));
-  box-shadow: 0 0 42px rgba(255, 0, 255, 1), 0 0 140px rgba(255, 255, 255, 1);
-  border: 2px solid rgba(255, 255, 255, 1);
-  border-radius: 999px;
-  transform-origin: left center;
-  overflow: visible;
-  z-index: 20;
-}
-
 .splash-name {
   position: relative;
   z-index: 8;
