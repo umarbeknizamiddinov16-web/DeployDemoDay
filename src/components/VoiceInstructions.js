@@ -97,13 +97,11 @@ export default function VoiceInstructions({ language: languageProp, onRegister, 
     if (typeof window === "undefined" || !window.speechSynthesis) return null;
     const voices = window.speechSynthesis.getVoices();
 
-    // If user selected a specific voice, use it
     if (voiceName) {
       const selectedVoice = voices.find((v) => v.name === voiceName);
       if (selectedVoice) return selectedVoice;
     }
 
-    // Otherwise prefer voices matching the language
     let voice = voices.find((v) => v.lang.startsWith(lang.split("-")[0]));
     if (!voice) voice = voices.find((v) => v.lang.includes("en"));
     if (!voice && voices.length > 0) voice = voices[0];
@@ -113,24 +111,25 @@ export default function VoiceInstructions({ language: languageProp, onRegister, 
 
   const getSpeechOptions = () => {
     if (typeof window === "undefined") {
-      return { voiceName: "", volume: 1.0, pitch: 1.0 };
+      return { voiceName: "", volume: 1.0, pitch: 1.0, rate: 0.95 };
     }
     const voiceName = window.localStorage.getItem("digital-universe-voice") || "";
     const volumeValue = parseFloat(window.localStorage.getItem("digital-universe-voice-volume"));
     const pitchValue = parseFloat(window.localStorage.getItem("digital-universe-voice-pitch"));
-
     const rateValue = parseFloat(window.localStorage.getItem("digital-universe-voice-rate"));
+
     return {
       voiceName,
       volume: Number.isFinite(volumeValue) ? Math.min(Math.max(volumeValue, 0.1), 1.0) : 1.0,
       pitch: Number.isFinite(pitchValue) ? Math.min(Math.max(pitchValue, 0.5), 2.0) : 1.0,
-      rate: Number.isFinite(rateValue) ? Math.min(Math.max(rateValue, 0.4), 1.5) : 0.65,
+      rate: Number.isFinite(rateValue) ? Math.min(Math.max(rateValue, 0.4), 1.5) : 0.95,
     };
   };
 
   const normalizeSpeechText = (text) => {
     if (!text) return "";
     return text
+      .replace(/[^a-zA-Z0-9а-яА-ЯёЁ\s.,!?-]/g, "") // Очищаем маркдаун (*, #), ломающий интонацию TTS
       .replace(/;/g, ". ")
       .replace(/\s*\.\s*/g, ". ")
       .replace(/\s*,\s*/g, ", ")
@@ -153,9 +152,7 @@ export default function VoiceInstructions({ language: languageProp, onRegister, 
       osc.start();
       osc.stop(ctx.currentTime + 0.12);
       osc.onended = () => ctx.close();
-    } catch (e) {
-      // ignore audio errors
-    }
+    } catch (e) {}
   };
 
   const speakInstructions = () => {
@@ -170,6 +167,10 @@ export default function VoiceInstructions({ language: languageProp, onRegister, 
       setIsSpeaking(false);
       setSpeechStatus(instructions.statusReady);
       return;
+    }
+
+    if (isListening) {
+      stopListening();
     }
 
     const { voiceName, volume, pitch, rate } = getSpeechOptions();
@@ -190,7 +191,8 @@ export default function VoiceInstructions({ language: languageProp, onRegister, 
       setIsSpeaking(false);
       setSpeechStatus(instructions.statusReady);
     };
-    utterance.onerror = () => {
+    utterance.onerror = (e) => {
+      console.error("Ошибка синтеза речи:", e);
       setIsSpeaking(false);
       setSpeechStatus(instructions.unsupported);
     };
@@ -212,8 +214,13 @@ export default function VoiceInstructions({ language: languageProp, onRegister, 
       return;
     }
 
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+    }
+
     const recognition = new SpeechRecognition();
-    recognition.lang = instructions.lang || "en-US";
+    recognition.lang = instructions.lang || "ru-RU";
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
 
@@ -224,14 +231,22 @@ export default function VoiceInstructions({ language: languageProp, onRegister, 
     };
 
     recognition.onresult = (event) => {
-      const text = event.results[0][0].transcript || "";
+      const text = event.results[0][0]?.transcript || "";
       setTranscript(text);
       handleVoiceCommand(text.toLowerCase());
     };
 
-    recognition.onerror = () => {
+    recognition.onerror = (event) => {
+      console.error("Ошибка распознавания речи:", event.error);
       setIsListening(false);
-      setSpeechStatus(instructions.unsupported);
+      
+      if (event.error === "not-allowed") {
+        setSpeechStatus("Доступ к микрофону заблокирован.");
+      } else if (event.error === "no-speech") {
+        setSpeechStatus("Команда не услышана.");
+      } else {
+        setSpeechStatus(`Ошибка: ${event.error}`);
+      }
     };
 
     recognition.onend = () => {
@@ -239,8 +254,12 @@ export default function VoiceInstructions({ language: languageProp, onRegister, 
       setSpeechStatus("");
     };
 
-    recognition.start();
-    recognitionRef.current = recognition;
+    try {
+      recognition.start();
+      recognitionRef.current = recognition;
+    } catch (e) {
+      console.error("Критический сбой запуска распознавания:", e);
+    }
   };
 
   const stopListening = () => {
@@ -254,7 +273,6 @@ export default function VoiceInstructions({ language: languageProp, onRegister, 
   };
 
   const handleVoiceCommand = (text) => {
-    // Basic keyword matching per language
     const maps = {
       ru: {
         register: ["регистрац", "зарегистр"],
@@ -274,7 +292,6 @@ export default function VoiceInstructions({ language: languageProp, onRegister, 
 
     const map = maps[language] || maps.en;
 
-    // Detect "NEXUS AI" trigger: user asked to open AI mode
     const nexusTriggers = ["nexus ai", "nexus", "нексус"];
     const hasNexus = nexusTriggers.some((k) => text.includes(k));
     const hasAi = text.includes("ai") || text.includes("ай");
@@ -309,10 +326,28 @@ export default function VoiceInstructions({ language: languageProp, onRegister, 
       
       utterance.onend = () => resolve();
       utterance.onerror = () => resolve();
+      
       playFeedbackTone();
       window.speechSynthesis.cancel();
       window.speechSynthesis.speak(utterance);
     });
+  };
+
+  // Функция запроса к вашему API Next.js, который вызывает Gemini
+  const askGeminiAPI = async (userPrompt) => {
+    try {
+      setSpeechStatus(language === "ru" ? "Запрос к ИИ..." : "Querying AI...");
+      const res = await fetch("/api/gemini", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: userPrompt, lang: language }),
+      });
+      const data = await res.json();
+      return data.text || (language === "ru" ? "Сбой связи с модулем ИИ." : "AI module communication failure.");
+    } catch (e) {
+      console.error("Ошибка сети при запросе к Gemini:", e);
+      return language === "ru" ? "Ошибка сети системы." : "System network error.";
+    }
   };
 
   const startAIMode = async () => {
@@ -321,11 +356,17 @@ export default function VoiceInstructions({ language: languageProp, onRegister, 
     aiStageRef.current = 0;
 
     const listenPhrase = language === "ru" ? "Слушаю, сэр." : "Listening, sir.";
-    const followupPhrase = language === "ru" ? "Как вы себя чувствуете, сэр?" : "How are you feeling, sir?";
+    const followupPhrase = language === "ru" ? "У вас есть ещё вопросы, сэр?" : "Do you have any more questions, sir?";
     const exitPhrase = language === "ru" ? "Выход из режима AI." : "Exiting AI mode.";
 
+    if (isListening) {
+      setIsListening(false);
+    }
+
+    // 1. Приветствие
     await speakText(listenPhrase);
 
+    // Внимание: исправлена опечатка в вашем window.SpeechRecognitionEvent на window.SpeechRecognition
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       setSpeechStatus(instructions.unsupported);
@@ -334,11 +375,10 @@ export default function VoiceInstructions({ language: languageProp, onRegister, 
     }
 
     if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch (e) {}
+      try { recognitionRef.current.stop(); } catch (e) {}
     }
 
+    // Инициализация записи реплики пользователя
     const recog = new SpeechRecognition();
     recog.lang = instructions.lang || "en-US";
     recog.interimResults = false;
@@ -348,29 +388,39 @@ export default function VoiceInstructions({ language: languageProp, onRegister, 
 
     recog.onresult = async (event) => {
       replied = true;
-      const text = event.results[0][0].transcript || "";
+      const text = event.results[0][0]?.transcript || "";
       setTranscript(text);
-      const ack = language === "ru" ? "Принято, сэр." : "Acknowledged, sir.";
-      await speakText(ack + " " + text);
+      
+      try { recog.stop(); } catch (e) {}
+      
+      // Отправляем текст в Gemini API роут и ждём ответ
+      const geminiResponse = await askGeminiAPI(text);
+      setTranscript(geminiResponse);
+      
+      // Озвучиваем ответ от Gemini
+      await speakText(geminiResponse);
       cleanupAI();
     };
 
-    recog.onerror = () => {};
-    recog.onend = () => {};
+    recog.onerror = (err) => {
+      console.log("Режим AI: Стадия 1 ошибка:", err.error);
+    };
 
     recognitionRef.current = recog;
-    try {
-      recog.start();
-    } catch (e) {}
+    
+    setTimeout(() => {
+      try { recog.start(); } catch (e) {}
+    }, 100);
 
+    // Таймер ожидания реплики (5 секунд)
     aiTimerRef.current = setTimeout(async () => {
       if (replied) return;
+      try { recog.stop(); } catch (e) {}
+      
+      // Стадия 2: Дополнительный вопрос, если пилот молчал
       await speakText(followupPhrase);
       aiStageRef.current = 1;
 
-      try {
-        recog.stop();
-      } catch (e) {}
       const recog2 = new SpeechRecognition();
       recog2.lang = instructions.lang || "en-US";
       recog2.interimResults = false;
@@ -379,20 +429,33 @@ export default function VoiceInstructions({ language: languageProp, onRegister, 
       let replied2 = false;
       recog2.onresult = async (event) => {
         replied2 = true;
-        const text = event.results[0][0].transcript || "";
+        const text = event.results[0][0]?.transcript || "";
         setTranscript(text);
-        const ack2 = language === "ru" ? "Спасибо, сэр." : "Thank you, sir.";
-        await speakText(ack2 + " " + text);
+        
+        try { recog2.stop(); } catch (e) {}
+        
+        // Отправляем реплику из стадии 2 в Gemini
+        const geminiResponse2 = await askGeminiAPI(text);
+        setTranscript(geminiResponse2);
+        
+        await speakText(geminiResponse2);
         cleanupAI();
       };
-      recog2.onerror = () => {};
+      
+      recog2.onerror = (err) => {
+        console.log("Режим AI: Стадия 2 ошибка:", err.error);
+        cleanupAI();
+      };
+
       recognitionRef.current = recog2;
-      try {
-        recog2.start();
-      } catch (e) {}
+      
+      setTimeout(() => {
+        try { recog2.start(); } catch (e) {}
+      }, 100);
 
       aiTimerRef.current = setTimeout(async () => {
         if (replied2) return;
+        try { recog2.stop(); } catch (e) {}
         await speakText(exitPhrase);
         cleanupAI();
       }, 5000);
@@ -412,6 +475,7 @@ export default function VoiceInstructions({ language: languageProp, onRegister, 
     }
     aiStageRef.current = 0;
     setAiMode(false);
+    setSpeechStatus("");
   };
 
   const performAction = (action) => {
@@ -452,9 +516,9 @@ export default function VoiceInstructions({ language: languageProp, onRegister, 
           <button
             type="button"
             onClick={startListening}
-            className={`rounded-full border px-3 py-2 text-sm font-semibold transition ${isListening ? "bg-emerald-500/20 border-emerald-400" : "border-white/10"}`}
+            className={`rounded-full border px-3 py-2 text-sm font-semibold transition ${isListening || aiMode ? "bg-emerald-500/20 border-emerald-400" : "border-white/10"}`}
           >
-            {isListening ? instructions.listening : instructions.listen}
+            {isListening || aiMode ? instructions.listening : instructions.listen}
           </button>
         </div>
       </div>
@@ -487,7 +551,7 @@ export default function VoiceInstructions({ language: languageProp, onRegister, 
         ) : null}
 
         {speechStatus ? <p className="text-sm text-cyan-100">{speechStatus}</p> : null}
-        {transcript ? <p className="text-sm text-slate-300">{transcript}</p> : null}
+        {transcript ? <p className="text-sm text-slate-300 line-clamp-3 overflow-hidden select-none">{transcript}</p> : null}
       </div>
     </div>
   );

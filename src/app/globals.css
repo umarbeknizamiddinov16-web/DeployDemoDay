@@ -37,7 +37,7 @@ html {
     transform: translate3d(0, 0, 0);
   }
   50% {
-    transform: translate3d(8px, -8px, 0);
+    transform: translate3d(var(--drift-x, 8px), var(--drift-y, -8px), 0);
   }
 }
 

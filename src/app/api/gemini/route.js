@@ -137,17 +137,27 @@ export async function POST(request) {
       return new Response(JSON.stringify({ error: "Invalid request JSON body" }), { status: 400 });
     }
 
-    const { question } = body;
+    // Совместимость: берем либо question (из старого кода чата), либо prompt (из нового голосового компонента)
+    const rawQuestion = body.question || body.prompt;
 
-    if (!question || typeof question !== "string") {
-      return new Response(JSON.stringify({ error: "Question is required and must be a string." }), { status: 400 });
+    if (!rawQuestion || typeof rawQuestion !== "string") {
+      return new Response(JSON.stringify({ error: "Question or prompt is required and must be a string." }), { status: 400 });
     }
 
-    const normalizedQuestion = normalizeQuestion(question);
-    const responseLanguage = detectResponseLanguage(question);
+    const normalizedQuestion = normalizeQuestion(rawQuestion);
+    const responseLanguage = detectResponseLanguage(rawQuestion);
 
-    const prompt = `You are Gemini, a helpful AI assistant that answers ALL questions. If the user's text contains typos, spelling mistakes, or small grammar errors, correct them silently and answer the intended meaning. Respond in ${responseLanguage}.
-  
+    // Системный промпт: жестко запрещаем разметку, чтобы синтезатор речи не читал звездочки вслух, 
+    // и просим отвечать емко (для удобства прослушивания на лету)
+    const prompt = `You are Gemini, the onboard AI computer of the Nexus spaceship. 
+You answer ALL questions. If the user's text contains typos, spelling mistakes, or small grammar errors, correct them silently and answer the intended meaning. 
+Respond in ${responseLanguage}.
+
+CRITICAL INSTRUCTION FOR VOICE OUTPUT:
+- Be concise and clear (maximum 2-3 sentences if possible).
+- DO NOT use markdown format, asterisks (**bold**), hashtags, bullet points or lists. 
+- The text must be flat, smooth, and easily readable by a text-to-speech engine.
+
 Site context: ${siteKnowledge}
 
 User question: ${normalizedQuestion}`;
@@ -179,22 +189,24 @@ User question: ${normalizedQuestion}`;
       errorsLog.push("[OpenAI Skip]: Ключ OpenAI не задан.");
     }
 
-    // Если хоть один ИИ ответил — отдаем успешный результат
-    if (finalAnswer) {
-      return new Response(JSON.stringify({ answer: finalAnswer }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" }
-      });
+    // Если всё сломалось — формируем лог ошибок
+    if (!finalAnswer) {
+      const combinedErrors = errorsLog.join("\n");
+      finalAnswer = `⚠️ ОШИБКА КЛЮЧЕЙ ИЛИ СЕТИ!\n Ни один ИИ не смог ответить.\n\nЛог инспектора:\n${combinedErrors}\n\n👉 Что делать?\n1. Проверьте правильность имен переменных в .env\n2. Перезапустите сервер (npm run dev) в терминале\n3. Если вы в РФ/РБ, включите VPN на ПК (Google блокирует запросы по IP).`;
     }
 
-    // Если всё сломалось — выводим ПОДРОБНЫЙ лог ошибок прямо на экран
-    const combinedErrors = errorsLog.join("\n");
-    const debugMessage = `⚠️ ОШИБКА КЛЮЧЕЙ ИЛИ СЕТИ!\n Ни один ИИ не смог ответить.\n\nЛог инспектора:\n${combinedErrors}\n\n👉 Что делать?\n1. Проверьте правильность имен переменных в .env\n2. Перезапустите сервер (npm run dev) в терминале\n3. Если вы в РФ/РБ, включите VPN на ПК (Google блокирует запросы по IP).`;
-
-    return new Response(JSON.stringify({ answer: debugMessage }), {
-      status: 200, 
-      headers: { "Content-Type": "application/json" }
-    });
+    // Возвращаем ДВА поля одновременно: answer (для чата) и text (для голоса), 
+    // чтобы ничего не сломать в других местах системы!
+    return new Response(
+      JSON.stringify({ 
+        answer: finalAnswer, 
+        text: finalAnswer 
+      }), 
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      }
+    );
 
   } catch (error) {
     console.error("--- КРИТИЧЕСКАЯ ОШИБКА НА СЕРВЕРЕ ---");
@@ -203,6 +215,7 @@ User question: ${normalizedQuestion}`;
     return new Response(
       JSON.stringify({ 
         answer: `Системный сбой: ${error.message}`, 
+        text: `Системный сбой: ${error.message}`, 
         error: error.message,
         stack: error.stack 
       }), 
